@@ -10,16 +10,26 @@ import sys
 import os
 
 # Ensure project root folder is in python path for module loading
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
+
+# Global error holder for backend thread debugging
+backend_error = None
 
 # ----------------- BACKEND THREAD STARTUP (FOR STREAMLIT CLOUD DEPLOYMENT) -----------------
 # Automatically spins up the FastAPI backend inside a background thread if not already running.
 def run_backend():
-    import uvicorn
-    # Import uvicorn locally to prevent importing issues on start
-    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, log_level="warning")
+    global backend_error
+    try:
+        import uvicorn
+        from backend.app.main import app
+        # Run uvicorn directly with the app object to avoid import path string lookup issues
+        uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    except Exception as e:
+        backend_error = str(e)
+        import traceback
+        traceback.print_exc()
 
 # Check if backend port 8000 is open
 backend_running = False
@@ -39,7 +49,7 @@ if not backend_running:
         backend_thread = threading.Thread(target=run_backend, name="FastAPI-Backend", daemon=True)
         backend_thread.start()
         # Wait a moment for database initialization
-        time.sleep(2.5)
+        time.sleep(3.0)
 
 # Set page config
 st.set_page_config(
@@ -293,16 +303,27 @@ with st.sidebar:
 
 
 # ----------------- BACKEND STATUS CHECK -----------------
-try:
-    health_check = requests.get(f"{st.session_state.backend_url}/")
-    is_online = health_check.status_code == 200
-    api_key_configured = health_check.json().get("api_key_configured", True) if is_online else False
-except Exception:
-    is_online = False
-    api_key_configured = False
+is_online = False
+api_key_configured = False
+
+# Try connecting up to 5 times (total 10 seconds) to allow slow containers to spin up uvicorn
+for attempt in range(5):
+    try:
+        health_check = requests.get(f"{st.session_state.backend_url}/", timeout=2.0)
+        if health_check.status_code == 200:
+            is_online = True
+            api_key_configured = health_check.json().get("api_key_configured", True)
+            break
+    except Exception:
+        pass
+    time.sleep(2.0)
 
 if not is_online:
-    st.error(f"⚠️ Unable to connect to the backend server at `{st.session_state.backend_url}`. Please make sure the backend server is running.")
+    st.error(f"⚠️ Unable to connect to the backend server at `{st.session_state.backend_url}`.")
+    if backend_error:
+        st.error(f"**Backend Thread Error:** `{backend_error}`")
+    else:
+        st.info("The backend service is taking longer than expected to start. Please refresh the page in a few seconds or check your Streamlit Cloud logs.")
     st.stop()
 
 st.session_state.api_key_configured = api_key_configured
