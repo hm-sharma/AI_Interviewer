@@ -4,6 +4,42 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+import threading
+import time
+import sys
+import os
+
+# Ensure project root folder is in python path for module loading
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+# ----------------- BACKEND THREAD STARTUP (FOR STREAMLIT CLOUD DEPLOYMENT) -----------------
+# Automatically spins up the FastAPI backend inside a background thread if not already running.
+def run_backend():
+    import uvicorn
+    # Import uvicorn locally to prevent importing issues on start
+    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, log_level="warning")
+
+# Check if backend port 8000 is open
+backend_running = False
+try:
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.2)
+    s.connect(("127.0.0.1", 8000))
+    backend_running = True
+    s.close()
+except Exception:
+    pass
+
+if not backend_running:
+    # Ensure thread is only registered once
+    if not any(thread.name == "FastAPI-Backend" for thread in threading.enumerate()):
+        backend_thread = threading.Thread(target=run_backend, name="FastAPI-Backend", daemon=True)
+        backend_thread.start()
+        # Wait a moment for database initialization
+        time.sleep(2.5)
 
 # Set page config
 st.set_page_config(
