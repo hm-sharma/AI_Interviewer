@@ -1,0 +1,36 @@
+# Environment Configurations
+.env
+
+# Database Files
+*.db
+*.db-journal
+*.db-wal
+interviewer.db
+
+# User Upload Caches (Resumes & JDs)
+uploads/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE Configuration Files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS Files
+.DS_Store
+Thumbs.db
